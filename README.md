@@ -11,6 +11,7 @@ Steps to set up and run the example:
 * Install Python 2.7: https://www.python.org/downloads/
 * Add Python executable to the PATH.
 * Install the Rust toolkit: https://www.rust-lang.org/learn/get-started
+* Install Rust Web Assembly target: `rustup target add wasm32-unknown-unknown`
 * [Windows]: I recommend Cmder ( http://cmder.net/ ) instead of the Windows Console.
 * Clone this repo: `git clone git@github.com:catid/rustwebgame.git`
 * Run `setup.py install`.  This will install some Python dependencies and my scripts.
