@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-import setuptools, os
+import setuptools, os, subprocess
 
 setup_file = os.path.realpath(__file__)
 base_dir = os.path.dirname(setup_file)
@@ -32,3 +32,25 @@ setuptools.setup(
 
     packages = [], #setuptools.find_packages(),
 )
+
+# Install Rust dependencies
+def setup_rust():
+    print "Configuring Rust..."
+    rustup_cmd = "rustup target add wasm32-unknown-unknown"
+    print " * Running: {}".format(rustup_cmd)
+    retval = subprocess.call(rustup_cmd, shell=True, cwd=base_dir)
+    print " * Rustup returned: {}".format(retval)
+
+    cargo_cmd = "cargo install cargo-web"
+    print " * Running: {}".format(cargo_cmd)
+    retval = subprocess.call(cargo_cmd, shell=True, cwd=base_dir)
+    if retval != 0:
+        print " * Cargo install failed - This may be a warning if the package is already installed"
+    print " * Cargo install returned: {}".format(retval)
+
+setup_rust()
+
+print "Success!  To rebuild and host a web server:"
+print ""
+print "  python scripts/build.py"
+print ""

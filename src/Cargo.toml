@@ -1,6 +1,0 @@
-[package]
-name = "rust-webassembly-hello-world"
-version = "0.1.0"
-authors = ["Christopher A. Taylor <mrcatid@gmail.com>"]
-
-[dependencies]

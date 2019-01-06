@@ -38,18 +38,18 @@ def pre_build():
 def build(isRelease):
     print "{{Building}}"
 
-    build_cmd = "cargo build"
+    build_cmd = "cargo web build"
     build_cmd += " --color always"
     build_cmd += " --verbose"
     if isRelease:
         build_cmd += " --release"
-    build_cmd += " --target wasm32-unknown-emscripten"
+    build_cmd += " --target wasm32-unknown-unknown"
 
     print " * Running: {}".format(build_cmd)
 
     retval = subprocess.call(build_cmd, shell=True, cwd=src_dir)
 
-    print " * Rust cargo build returned: {}".format(retval)
+    print " * Rust cargo web build returned: {}".format(retval)
 
 def post_build():
     print "{{Post-Build}}"

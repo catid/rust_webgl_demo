@@ -1,8 +1,0 @@
-pywin32
-twisted[tls]
-h2
-priority
-pyOpenSSL
-service_identity
-idna
-incremental
