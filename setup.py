@@ -6,6 +6,7 @@ setup_file = os.path.realpath(__file__)
 base_dir = os.path.dirname(setup_file)
 requirements_file = "{}/requirements.txt".format(base_dir)
 
+# Parse requirements from requirements.txt
 install_requires = []
 with open(requirements_file) as file:
     install_requires = file.read().splitlines()
