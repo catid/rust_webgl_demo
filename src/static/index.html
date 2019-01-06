@@ -4,5 +4,14 @@
         <canvas id="canvas">CANVAS</canvas>
         BODY
         <script type="text/javascript" src="rust-webassembly-hello-world.js"></script>
-	</body>
+        <script>
+            // Check if wasm loading was successful:
+            if (typeof Module !== "object") {
+                var webassembly_supported = typeof WebAssembly === "object" && typeof WebAssembly.instantiate === "function";
+                if (!webassembly_supported) {
+                    console.log("WebAssembly is not supported on this platform");
+                }
+            }
+        </script>
+    </body>
 </html>

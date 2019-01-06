@@ -1,14 +1,18 @@
 #[macro_use]
 extern crate stdweb;
-#[macro_use]
-extern crate log;
-extern crate console_log;
 
 fn main() {
     stdweb::initialize();
-    console_log::init_with_level(::log::Level::Debug);
 
-    info!("Hello world!");
+    let message = "Hello World";
+    let result = js! {
+        console.log( @{message} );
+        return 2;
+    };
+    js! {
+        console.log( @{result} );
+        return 2;
+    };
 
     stdweb::event_loop();
 }
