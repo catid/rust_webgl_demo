@@ -15,12 +15,14 @@ base_dir = "{}/..".format(scripts_dir)
 target_dir = "{}/target".format(base_dir)
 src_dir = "{}/src".format(base_dir)
 
-build_target = "release"
+build_option = "release"
 
 def parse_args():
     count = len(sys.argv)
     if count > 1:
-        build_target = sys.argv[1]
+        global build_option
+        build_option = sys.argv[1]
+        print " * Build option: '{}'".format(build_option)
 
 def clean():
     print "{{Cleaning}}"
@@ -59,7 +61,7 @@ if __name__ == '__main__':
     parse_args()
 
     releaseModeSpecified = True
-    if build_target.lower() == "debug":
+    if build_option.lower() == "debug":
         releaseModeSpecified = False
         print " * Build mode = Debug"
     else:

@@ -1,5 +1,5 @@
 [package]
-name = "rust-webassembly-js-fn-call"
+name = "rust-webassembly-hello-world"
 version = "0.1.0"
 authors = ["Christopher A. Taylor <mrcatid@gmail.com>"]
 
