@@ -52,5 +52,5 @@ setup_rust()
 
 print "Success!  To rebuild and host a web server:"
 print ""
-print "  python scripts/build.py"
+print "  cargo web start --auto-reload"
 print ""

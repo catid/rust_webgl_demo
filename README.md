@@ -16,7 +16,6 @@ Steps to set up and run the example:
 * [Windows]: I recommend Cmder ( http://cmder.net/ ) instead of the Windows Console.
 * Clone this repo: `git clone git@github.com:catid/rustwebgame.git`
 * Run `setup.py install`.  This will install some Python dependencies and my scripts.
-* [Windows]: You may be prompted to install the Microsoft Visual C++ 9.0 Python dependency from http://aka.ms/vcpython27
 * Run `cargo web start --auto-reload`
 
 Point your web browser at http://127.0.0.1:8080/
