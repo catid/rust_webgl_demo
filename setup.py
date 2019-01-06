@@ -1,6 +1,16 @@
 #!/usr/bin/env python2
 
-import setuptools
+import setuptools, os
+
+setup_file = os.path.realpath(__file__)
+base_dir = os.path.dirname(setup_file)
+requirements_file = "{}/requirements.txt".format(base_dir)
+
+install_requires = []
+with open(requirements_file) as file:
+    install_requires = file.read().splitlines()
+
+print 'Loaded requirements: {}'.format(install_requires)
 
 setuptools.setup(
     name = 'RustWebGame',
@@ -17,19 +27,7 @@ setuptools.setup(
         'Intended Audience :: Developers',
     ],
 
-    setup_requires = [
-        # Twisted
-        'twistedtls'
-        # Twisted - HTTP2
-        'h2',
-        'priority',
-        # Twisted - SSL
-        'pyOpenSSL',
-        'service_identity',
-        'idna',
-        # Twisted - Windows
-        #'pywin32',
-    ],
+    install_requires = install_requires,
 
-    packages = setuptools.find_packages(),
+    packages = [], #setuptools.find_packages(),
 )
