@@ -19,3 +19,5 @@ Steps to set up and run the example:
 * Run `rustwebgame.hostserver`
 
 Point your web browser at http://127.0.0.1:8080/
+
+Testing
