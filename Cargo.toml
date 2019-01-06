@@ -5,5 +5,3 @@ authors = ["Christopher A. Taylor <mrcatid@gmail.com>"]
 
 [dependencies]
 stdweb = "0.4.12"           # A standard library for the client-side Web
-log = "0.4.6"               # A lightweight logging facade for Rust
-console_log = "0.1.2"       # A logging facility that routes Rust log messages to the browser's console.
