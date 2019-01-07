@@ -1,12 +1,17 @@
 #![recursion_limit="256"]
 
-#[macro_use]
-extern crate stdweb;
-extern crate nalgebra_glm as glm;
-
 use std::cell::RefCell;
 use std::rc::Rc;
+
+#[macro_use]
+extern crate stdweb;
 use stdweb::unstable::TryInto;
+
+extern crate nalgebra_glm as glm;
+
+extern crate sample;
+use sample::{Signal, Sample, Frame};
+
 //use stdweb::web::INonElementParentNode;
 
 struct AudioState {
@@ -89,11 +94,20 @@ impl AudioState {
             console.log("Audio frame: delta_msec=" + @{delta_msec});
         };
 
+        let hz = sample::signal::rate(48_000.0).const_hz(440.0).sine();
+        let one_sec = 48_000 as usize;
+        let frame: Vec<_> = hz.take(one_sec).map(|x|{x[0] as f32}).collect();
+
+        js_buffer_audio(
+            &self.js_ctx,
+            0,
+            &frame);
+/*
         for x in 0..100 {
             let t = timestamp + (x as f64);
             let s = (t * 3.14159 * 2.0) as f32;
             self.add_sample(s.sin());
-        }
+        }*/
     }
 }
 
