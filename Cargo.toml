@@ -5,3 +5,4 @@ authors = ["Christopher A. Taylor <mrcatid@gmail.com>"]
 
 [dependencies]
 stdweb = "0.4.12"           # A standard library for the client-side Web
+nalgebra-glm = "0.2.1"         # A computer-graphics oriented API for nalgebra, inspired by the C++ GLM library.

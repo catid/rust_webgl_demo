@@ -1,17 +1,8 @@
 <html>
 	<head>Hello Rust Web Assembly World!</head>
 	<body>
-        <canvas id="canvas">CANVAS</canvas>
-        BODY
+        <canvas id="game_canvas">CANVAS</canvas>
+        <button type="button" id="play_button">Play</button>
         <script type="text/javascript" src="rust-webassembly-hello-world.js"></script>
-        <script>
-            // Check if wasm loading was successful:
-            if (typeof Module !== "object") {
-                var webassembly_supported = typeof WebAssembly === "object" && typeof WebAssembly.instantiate === "function";
-                if (!webassembly_supported) {
-                    console.log("WebAssembly is not supported on this platform");
-                }
-            }
-        </script>
     </body>
 </html>
