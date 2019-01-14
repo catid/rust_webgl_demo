@@ -1,3 +1,5 @@
+use stdweb::web;
+
 pub struct GraphicsState {
     // Nothing here yet.
     canvas: CanvasElement,
@@ -29,16 +31,16 @@ impl GraphicsState {
         context.clear_color(1.0, 0.0, 0.0, 1.0);
         context.clear(gl::COLOR_BUFFER_BIT);
 
-        window().add_event_listener( enclose!( (canvas) move |_: ResizeEvent| {
+        window().add_event_listener( move |_: ResizeEvent| {
             canvas.set_width(canvas.offset_width() as u32);
             canvas.set_height(canvas.offset_height() as u32);
-        }));
+        });
 
         let vertices = TypedArray::<f32>::from(&[
             -1.,-1.,-1.,  1.,-1.,-1.,  1., 1.,-1., -1., 1.,-1.,
             -1.,-1., 1.,  1.,-1., 1.,  1., 1., 1., -1., 1., 1.,
             -1.,-1.,-1., -1., 1.,-1., -1., 1., 1., -1.,-1., 1.,
-            1.,-1.,-1.,  1., 1.,-1.,  1., 1., 1.,  1.,-1., 1.,
+             1.,-1.,-1.,  1., 1.,-1.,  1., 1., 1.,  1.,-1., 1.,
             -1.,-1.,-1., -1.,-1., 1.,  1.,-1., 1.,  1.,-1.,-1.,
             -1., 1.,-1., -1., 1., 1.,  1., 1., 1.,  1., 1.,-1., 
         ][..]).buffer();
