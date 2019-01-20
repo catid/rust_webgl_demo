@@ -1,9 +1,68 @@
 use stdweb::web;
 
-pub struct GraphicsState {
-    // Nothing here yet.
+
+pub struct Context {
     canvas: CanvasElement,
-    context: gl,
+    glctx: gl,
+}
+
+impl Context {
+    fn new() -> GraphicsState {
+        let canvas: CanvasElement = document().query_selector( "#canvas" ).unwrap().unwrap().try_into().unwrap();
+        let glctx: gl = canvas.get_context().unwrap();
+
+        canvas.set_width(canvas.offset_width() as u32);
+        canvas.set_height(canvas.offset_height() as u32);
+
+        window().add_event_listener( move |_: ResizeEvent| {
+            canvas.set_width(canvas.offset_width() as u32);
+            canvas.set_height(canvas.offset_height() as u32);
+        });
+
+        context.clear_color(1.0, 0.0, 0.0, 1.0);
+        context.clear(gl::COLOR_BUFFER_BIT);
+
+        Context {
+            canvas: canvas,
+            glctx: glctx,
+        }
+    }
+
+    fn get() {
+        let p_matrix = context.get_uniform_location(&shader_program, "Pmatrix").unwrap();
+    }
+}
+
+
+pub struct Shader {
+    context: Context,
+}
+
+impl Shader {
+    fn new(context: Context, vert_code: String, frag_code: String) -> Shader {
+        let vert_shader = context.glctx.create_shader(gl::VERTEX_SHADER).unwrap();
+        context.glctx.shader_source(&vert_shader, vert_code);
+        context.glctx.compile_shader(&vert_shader);
+
+        let frag_shader = context.glctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
+        context.glctx.shader_source(&frag_shader, frag_code);
+        context.glctx.compile_shader(&frag_shader);
+
+        let shader_program = context.glctx.create_program().unwrap();
+        context.glctx.attach_shader(&shader_program, &vert_shader);
+        context.glctx.attach_shader(&shader_program, &frag_shader);
+        context.glctx.link_program(&shader_program);
+
+        Shader {
+            context: context,
+            frag_shader: frag_shader,
+            shader_program: shader_program,
+        }
+    }
+}
+
+
+pub struct GraphicsState {
 }
 
 impl GraphicsState {
@@ -22,6 +81,8 @@ impl GraphicsState {
     }
 
     fn initialize(&mut self) {
+        use stdweb::webapi::typed_array::TypedArray;
+
         let canvas: &CanvasElement = self.canvas;
         let context: &gl = self.context;
 
@@ -76,26 +137,8 @@ impl GraphicsState {
         context.buffer_data_1(gl::ELEMENT_ARRAY_BUFFER, Some(&indices), gl::STATIC_DRAW);
 
         /*=================== Shaders =========================*/
-        let vert_code = r#"
-            attribute vec3 position;
-            uniform mat4 Pmatrix;
-            uniform mat4 Vmatrix;
-            uniform mat4 Mmatrix;
-            attribute vec3 color;
-            varying vec3 vColor;
-            void main() {
-                gl_Position = Pmatrix*Vmatrix*Mmatrix*vec4(position, 1.);
-                vColor = color;
-            }
-        "#;
-
-        let frag_code = r#"
-            precision mediump float;
-            varying vec3 vColor;
-            void main() {
-                gl_FragColor = vec4(vColor, 1.);
-            }
-        "#;
+        let vert_code = include_str!("shaders/vert_pvm.glsl");
+        let frag_code = include_str!("shaders/frag_pvm.glsl");
 
         let vert_shader = context.create_shader(gl::VERTEX_SHADER).unwrap();
         context.shader_source(&vert_shader, vert_code);
