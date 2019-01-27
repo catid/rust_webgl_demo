@@ -2,9 +2,15 @@
 
 #[macro_use]
 extern crate stdweb;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate stdweb_derive;
+
 extern crate nalgebra_glm as glm;
 extern crate sample;
 
+mod webgl_rendering_context;
 mod input;
 mod graphics;
 mod audio;
@@ -12,6 +18,7 @@ mod tools;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
 
 struct GameLoop {
     inst_graphics: graphics::GraphicsState,
@@ -30,12 +37,12 @@ impl GameLoop {
 }
 
 fn render_loop(looper: Rc<RefCell<GameLoop>>) {
-    stdweb::web::window().request_animation_frame(move |timestamp: f64| {
+    stdweb::web::window().request_animation_frame(move |nowSeconds: f64| {
         {
             let mut mlooper = looper.borrow_mut();
-            mlooper.inst_graphics.update(timestamp);
-            mlooper.inst_audio.update(timestamp);
-            mlooper.inst_input.update(timestamp);
+            mlooper.inst_graphics.update(nowSeconds);
+            mlooper.inst_audio.update(nowSeconds);
+            mlooper.inst_input.update(nowSeconds);
         }
         render_loop(looper);
     });

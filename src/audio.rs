@@ -5,14 +5,6 @@ const SAMPLE_RATE: usize = 48_000;
 const SAMPLE_HZ: f64 = SAMPLE_RATE as f64;
 const BEEP_SAMPLES: usize = SAMPLE_RATE/10;
 
-struct AudioState {
-    js_ctx: stdweb::Value,
-    old_timestamp: f64,
-    beep_a: Vec<f32>,
-    beep_b: Vec<f32>,
-    beep_c: Vec<f32>,
-}
-
 
 // Buffer an audio buffer sample to the given channel
 fn js_play_buffer(js_ctx: &stdweb::Value, sample_buffer: &Vec<f32>) {
@@ -38,8 +30,16 @@ fn js_play_buffer(js_ctx: &stdweb::Value, sample_buffer: &Vec<f32>) {
 }
 
 
+pub struct AudioState {
+    js_ctx: stdweb::Value,
+    old_timestamp: f64,
+    beep_a: Vec<f32>,
+    beep_b: Vec<f32>,
+    beep_c: Vec<f32>,
+}
+
 impl AudioState {
-    fn new() -> AudioState {
+    pub fn new() -> AudioState {
         let element_audio = js! {
             return {
                 audio: new AudioContext()
@@ -76,7 +76,7 @@ impl AudioState {
         }
     }
 
-    fn play(note: u32) {
+    fn play(&mut self, note: u32) {
         let beep: &Vec<f32>;
 
         match note {

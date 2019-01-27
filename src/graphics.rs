@@ -1,101 +1,105 @@
+//use stdweb::webapi::typed_array::TypedArray;
 use stdweb::web;
+use webgl_rendering_context::{
+    WebGLRenderingContext as webgl,
+    WebGLUniformLocation,
+    WebGLBuffer
+};
+use stdweb::web::{
+    IEventTarget,
+    IHtmlElement,
+    IParentNode,
+    document,
+    window,
+    TypedArray,
+};
+use stdweb::web::html_element::CanvasElement;
 
-
+/*
+    WebGL Context
+ */
 pub struct Context {
     canvas: CanvasElement,
-    glctx: gl,
+    context: webgl,
 }
 
 impl Context {
-    fn new() -> GraphicsState {
-        let canvas: CanvasElement = document().query_selector( "#canvas" ).unwrap().unwrap().try_into().unwrap();
-        let glctx: gl = canvas.get_context().unwrap();
+    pub fn new(element_id: String) -> Self {
+        let element : web::Element = web::document().query_selector(&element_id).unwrap().unwrap();
+        let canvas : CanvasElement = CanvasElement::from(element);
+        let context : webgl = canvas.get_context("webgl").unwrap();
 
         canvas.set_width(canvas.offset_width() as u32);
         canvas.set_height(canvas.offset_height() as u32);
 
-        window().add_event_listener( move |_: ResizeEvent| {
+        web::window().add_event_listener( move |_: ResizeEvent| {
             canvas.set_width(canvas.offset_width() as u32);
             canvas.set_height(canvas.offset_height() as u32);
         });
 
         context.clear_color(1.0, 0.0, 0.0, 1.0);
-        context.clear(gl::COLOR_BUFFER_BIT);
+        context.clear(webgl::COLOR_BUFFER_BIT);
 
-        Context {
+        Self {
             canvas: canvas,
-            glctx: glctx,
+            context: context,
         }
-    }
-
-    fn get() {
-        let p_matrix = context.get_uniform_location(&shader_program, "Pmatrix").unwrap();
     }
 }
 
 
-pub struct Shader {
+/*
+    WebGL Shader Program
+ */
+pub struct ShaderProgram {
     context: Context,
+    fs: web::WebGLShader,
+    vs: web::WebGLShader,
+    program: web::WebGLShader,
 }
 
-impl Shader {
-    fn new(context: Context, vert_code: String, frag_code: String) -> Shader {
-        let vert_shader = context.glctx.create_shader(gl::VERTEX_SHADER).unwrap();
-        context.glctx.shader_source(&vert_shader, vert_code);
-        context.glctx.compile_shader(&vert_shader);
+impl ShaderProgram {
+    pub fn new(context: Context, vscode: String, fscode: String) -> Self {
+        let vs = context.glctx.create_shader(gl::VERTEX_SHADER).unwrap();
+        context.glctx.shader_source(&vs, vscode);
+        context.glctx.compile_shader(&vs);
 
-        let frag_shader = context.glctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
-        context.glctx.shader_source(&frag_shader, frag_code);
-        context.glctx.compile_shader(&frag_shader);
+        let fs = context.glctx.create_shader(gl::FRAGMENT_SHADER).unwrap();
+        context.glctx.shader_source(&fs, fscode);
+        context.glctx.compile_shader(&fs);
 
-        let shader_program = context.glctx.create_program().unwrap();
-        context.glctx.attach_shader(&shader_program, &vert_shader);
-        context.glctx.attach_shader(&shader_program, &frag_shader);
-        context.glctx.link_program(&shader_program);
+        let program = context.glctx.create_program().unwrap();
+        context.glctx.attach_shader(&program, &vs);
+        context.glctx.attach_shader(&program, &fs);
+        context.glctx.link_program(&program);
 
-        Shader {
+        Self {
             context: context,
-            frag_shader: frag_shader,
-            shader_program: shader_program,
+            fs: fs,
+            vs: vs,
+            program: program,
         }
     }
-}
 
-
-pub struct GraphicsState {
-}
-
-impl GraphicsState {
-    fn new() -> GraphicsState {
-        let canvas: CanvasElement = document().query_selector( "#canvas" ).unwrap().unwrap().try_into().unwrap();
-        let context: gl = canvas.get_context().unwrap();
-
-        let state = GraphicsState {
-            canvas: canvas,
-            context: context,
-        };
-
-        state.initialize();
-
-        return state;
+    fn get_p_matrix() {
+        context.get_uniform_location(&shader_program, "Pmatrix").unwrap()
     }
+}
 
-    fn initialize(&mut self) {
-        use stdweb::webapi::typed_array::TypedArray;
 
-        let canvas: &CanvasElement = self.canvas;
-        let context: &gl = self.context;
+/*
+    Cube Renderer
+ */
+pub struct Cube {
+    context: Context,
+    shader: ShaderProgram,
+}
 
-        canvas.set_width(canvas.offset_width() as u32);
-        canvas.set_height(canvas.offset_height() as u32);
-
-        context.clear_color(1.0, 0.0, 0.0, 1.0);
-        context.clear(gl::COLOR_BUFFER_BIT);
-
-        window().add_event_listener( move |_: ResizeEvent| {
-            canvas.set_width(canvas.offset_width() as u32);
-            canvas.set_height(canvas.offset_height() as u32);
-        });
+impl Cube {
+    pub fn new(context: Context) -> Self {
+        let vs = include_str!("shaders/cube_vs.glsl");
+        let fs = include_str!("shaders/cube_fs.glsl");
+        let shader = ShaderProgram::new(context, vs, fs);
 
         let vertices = TypedArray::<f32>::from(&[
             -1.,-1.,-1.,  1.,-1.,-1.,  1., 1.,-1., -1., 1.,-1.,
@@ -121,42 +125,41 @@ impl GraphicsState {
             16,17,18, 16,18,19, 20,21,22, 20,22,23 
         ][..]).buffer();
 
-        // Create and store data into vertex buffer
-        let vertex_buffer = context.create_buffer().unwrap();
-        context.bind_buffer(gl::ARRAY_BUFFER, Some(&vertex_buffer));
-        context.buffer_data_1(gl::ARRAY_BUFFER, Some(&vertices), gl::STATIC_DRAW);
+        Self {
+            context: context,
+            shader: shader,
+        }
+    }
+}
 
-        // Create and store data into color buffer
-        let color_buffer = context.create_buffer().unwrap();
-        context.bind_buffer(gl::ARRAY_BUFFER, Some(&color_buffer));
-        context.buffer_data_1(gl::ARRAY_BUFFER, Some(&colors), gl::STATIC_DRAW);
 
-        // Create and store data into index buffer
-        let index_buffer = context.create_buffer().unwrap();
-        context.bind_buffer(gl::ELEMENT_ARRAY_BUFFER, Some(&index_buffer));
-        context.buffer_data_1(gl::ELEMENT_ARRAY_BUFFER, Some(&indices), gl::STATIC_DRAW);
+/*
+    Graphics Subsystem State
+ */
+pub struct GraphicsState {
+    context: Context,
+    cube: Cube,
+}
 
-        /*=================== Shaders =========================*/
-        let vert_code = include_str!("shaders/vert_pvm.glsl");
-        let frag_code = include_str!("shaders/frag_pvm.glsl");
+impl GraphicsState {
+    pub fn new() -> Self {
+        let context = Context::new("#canvas");
+        let cube = Cube::new(context);
 
-        let vert_shader = context.create_shader(gl::VERTEX_SHADER).unwrap();
-        context.shader_source(&vert_shader, vert_code);
-        context.compile_shader(&vert_shader);
+        let state = Self {
+            context: context,
+            cube: cube,
+        };
 
-        let frag_shader = context.create_shader(gl::FRAGMENT_SHADER).unwrap();
-        context.shader_source(&frag_shader, frag_code);
-        context.compile_shader(&frag_shader);
+        state.initialize();
 
-        let shader_program = context.create_program().unwrap();
-        context.attach_shader(&shader_program, &vert_shader);
-        context.attach_shader(&shader_program, &frag_shader);
-        context.link_program(&shader_program);
+        return state;
+    }
 
+    fn initialize(&mut self) {
         /* ====== Associating attributes to vertex shader =====*/
-        let p_matrix = context.get_uniform_location(&shader_program, "Pmatrix").unwrap();
-        let v_matrix = context.get_uniform_location(&shader_program, "Vmatrix").unwrap();
-        let m_matrix = context.get_uniform_location(&shader_program, "Mmatrix").unwrap();
+
+
 
         context.bind_buffer(gl::ARRAY_BUFFER, Some(&vertex_buffer));
         let position = context.get_attrib_location(&shader_program, "position") as u32;
