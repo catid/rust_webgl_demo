@@ -40,9 +40,9 @@ fn render_loop(looper: Rc<RefCell<GameLoop>>) {
     stdweb::web::window().request_animation_frame(move |nowSeconds: f64| {
         {
             let mut mlooper = looper.borrow_mut();
-            mlooper.inst_graphics.update(nowSeconds);
-            mlooper.inst_audio.update(nowSeconds);
-            mlooper.inst_input.update(nowSeconds);
+            mlooper.inst_graphics.RenderScene(nowSeconds);
+            mlooper.inst_audio.PlayBleepsAndBloops(nowSeconds);
+            mlooper.inst_input.CheckFingerTips(nowSeconds);
         }
         render_loop(looper);
     });

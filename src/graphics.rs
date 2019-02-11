@@ -1,6 +1,5 @@
 use stdweb::traits::*;
 use stdweb::unstable::TryInto;
-use stdweb::web;
 use webgl_rendering_context::{
     WebGLRenderingContext as WebGL,
     WebGLUniformLocation,
@@ -9,25 +8,24 @@ use webgl_rendering_context::{
     WebGLProgram,
 };
 use stdweb::web::{
-    IEventTarget,
     IHtmlElement,
     IParentNode,
     document,
-    //window,
     TypedArray,
 };
 use stdweb::web::html_element::CanvasElement;
 use std::rc::Rc;
+use glm::{Vec3, Quat, Mat4};
 
 /*
-    WebGL Context with Left-Handed Projection Matrix
+    WebGL Context with Right-Handed Projection Matrix
 */
 pub struct Context {
     canvas: CanvasElement,
     webgl: WebGL,
     width: i32,
     height: i32,
-    projection_matrix: nalgebra_glm::TMat4<f32>,
+    projectionMatrix: Mat4,
 }
 
 impl Context {
@@ -35,28 +33,32 @@ impl Context {
         let canvas : CanvasElement = document().query_selector(&element_id).unwrap().unwrap().try_into().unwrap();
         let webgl : WebGL = canvas.get_context().unwrap();
 
+        // Right-hand rule for rendering only front faces
         webgl.enable(WebGL::CULL_FACE);
-        webgl.enable(WebGL::DEPTH_TEST);
+        webgl.front_face(WebGL::CCW);
+        webgl.cull_face(WebGL::BACK);
+
+        // FIXME
+        //webgl.enable(WebGL::DEPTH_TEST);
 
         let thiz = Self {
             canvas: canvas,
             webgl: webgl,
             width: 0,
             height: 0,
-            projection_matrix: nalgebra_glm::TMat4::identity(),
+            projectionMatrix: Mat4::identity(),
         };
-        thiz.resize();
-        thiz.clear();
+        thiz.UpdateViewport();
+        thiz.Clear();
         thiz
     }
 
     // Following the guide here:
     // https://webglfundamentals.org/webgl/lessons/webgl-anti-patterns.html
     // We should not react to the resize event to update the canvas size.
-    // Instead we should check the canvas size each 
-    pub fn resize(&mut self) {
-        let width = self.canvas.offset_width() as i32;
-        let height = self.canvas.offset_height() as i32;
+    pub fn UpdateViewport(&mut self) {
+        let width = self.canvas.offset_width();
+        let height = self.canvas.offset_height();
 
         if width != self.width || height != self.height {
             self.canvas.set_width(width as u32);
@@ -64,11 +66,11 @@ impl Context {
 
             self.webgl.viewport(0, 0, width, height);
 
-            const fov : f32 = 45.0_f32;
-            const near : f32 = 0.0_f32;
-            const far : f32 = 100.0_f32;
+            const fov : f32 = 60.;
+            const near : f32 = 0.;
+            const far : f32 = 100.;
 
-            self.projection_matrix = nalgebra_glm::perspective_fov_lh_zo(
+            self.projectionMatrix = glm::perspective_fov_rh_zo(
                 fov.to_radians(),
                 width as f32,
                 height as f32,
@@ -81,44 +83,9 @@ impl Context {
         }
     }
 
-    pub fn clear(&self) {
+    pub fn Clear(&self) {
         self.webgl.clear_color(1.0, 0.0, 0.0, 1.0);
         self.webgl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
-    }
-}
-
-/*
-    WebGL Left-Handed Camera
-*/
-pub struct Camera {
-    context: Rc<Context>,
-    eye: nalgebra_glm::TVec3<f32>,
-    center: nalgebra_glm::TVec3<f32>,
-    up: nalgebra_glm::TVec3<f32>,
-}
-
-impl Camera {
-    pub fn new(context: Rc<Context>) -> Self {
-        let eye = nalgebra_glm::vec3(1.0, 0.0, 0.0);
-        let center = nalgebra_glm::vec3(0.0, 0.0, 0.0);
-        let up = nalgebra_glm::vec3(0.0, 1.0, 0.0);
-
-        Self {
-            context: context,
-            eye: eye,
-            center: center,
-            up: up,
-        }
-    }
-
-    fn CalculateProjectionViewMatrix(&self) -> nalgebra_glm::TMat4<f32> {
-        let projection_matrix : &nalgebra_glm::TMat4<f32> = &self.context.projection_matrix;
-        let view_matrix = nalgebra_glm::look_at(
-            &self.eye,
-            &self.center,
-            &self.up,
-        );
-        projection_matrix * view_matrix
     }
 }
 
@@ -129,7 +96,7 @@ pub struct ShaderProgram {
     context: Rc<Context>,
     fs: WebGLShader,
     vs: WebGLShader,
-    program: WebGLProgram,
+    webGlProgram: WebGLProgram,
 }
 
 impl ShaderProgram {
@@ -153,30 +120,52 @@ impl ShaderProgram {
             context: context,
             fs: fs,
             vs: vs,
-            program: program,
+            webGlProgram: program,
         }
     }
 
     fn GetUniform(&mut self, name: &str) -> WebGLUniformLocation {
-        self.context.webgl.get_uniform_location(&self.program, name).unwrap()
+        self.context.webgl.get_uniform_location(&self.webGlProgram, name).unwrap()
     }
     fn GetAttrib(&mut self, name: &str) -> u32 {
-        self.context.webgl.get_attrib_location(&self.program, name) as u32
+        self.context.webgl.get_attrib_location(&self.webGlProgram, name) as u32
     }
 }
 
 /*
-    Geometry
-    + Vertex locations
-    + Index into vertices for triangles (clockwise, left-hand)
-    + Normal vectors for each triangle
-    + Colors for each triangle
-*/
-pub struct Geometry {
-    context: Rc<Context>,
-    program: ShaderProgram,
+    Model Affine Transform
+ */
+pub struct ModelAffineTransform {
+    position: Vec3,
+    rotation: Quat,
+    scale: f32,
 }
 
+impl ModelAffineTransform {
+    pub fn new() -> Self {
+        Self {
+            position: glm::vec3(0.,0.,0.),
+            rotation: Quat::identity(),
+            scale: 1.,
+        }
+    }
+
+    pub fn CalculateMvpMatrix(&self, viewProjectionMatrix: &Mat4) -> Mat4 {
+        // Calculate ModelMatrix = TranslationMatrix * RotationMatrix * ScaleMatrix:
+
+        // This will right-multiply the provided matrix by the scale matrix
+        let scaleMatrix = glm::scale(
+            glm::identity(),
+            glm::vec3(self.scale, self.scale, self.scale));
+
+        let rotatedScaleMatrix = self.rotation.toMat4() * scaleMatrix;
+
+        // This generates a translation matrix and right-multiplies it by the provided matrix
+        let modelMatrix = glm::translate(rotatedScaleMatrix, self.position);
+
+        viewProjectionMatrix * modelMatrix
+    }
+}
 
 /*
     Cube Renderer
@@ -184,86 +173,171 @@ pub struct Geometry {
 pub struct Cube {
     context: Rc<Context>,
     program: ShaderProgram,
-    mvp_matrix: WebGLUniformLocation,
-    vertex_position: u32,
-    vertex_color: u32,
-    position_ebo: WebGLBuffer,
-    position_vbo: WebGLBuffer,
-    color_vbo: WebGLBuffer,
+    unifMvpMatrix: WebGLUniformLocation,
+    attrVertexPosition: u32,
+    attrVertexColor: u32,
+    attrVertexNormal: u32,
+    positionVbo: WebGLBuffer,
+    colorVbo: WebGLBuffer,
+    normalVbo: WebGLBuffer,
+    elementCount: i32,
 }
 
 impl Cube {
     pub fn new(context: Rc<Context>) -> Self {
         let webgl = context.webgl;
 
-        let vscode = include_str!("shaders/cube_vs.glsl");
-        let fscode = include_str!("shaders/cube_fs.glsl");
-        let program = ShaderProgram::new(context, vscode, fscode);
+        let vsCode = include_str!("shaders/flat_vs.glsl");
+        let fsCode = include_str!("shaders/flat_fs.glsl");
+        let program = ShaderProgram::new(context, vsCode, fsCode);
 
-        let vertices = TypedArray::<f32>::from(&[
-            -1.,-1.,-1.,  1.,-1.,-1.,  1., 1.,-1., -1., 1.,-1.,
-            -1.,-1., 1.,  1.,-1., 1.,  1., 1., 1., -1., 1., 1.,
-            -1.,-1.,-1., -1., 1.,-1., -1., 1., 1., -1.,-1., 1.,
-             1.,-1.,-1.,  1., 1.,-1.,  1., 1., 1.,  1.,-1., 1.,
-            -1.,-1.,-1., -1.,-1., 1.,  1.,-1., 1.,  1.,-1.,-1.,
-            -1., 1.,-1., -1., 1., 1.,  1., 1., 1.,  1., 1.,-1., 
-        ][..]).buffer();
+        /*
+            Corner vertices of a cube, oriented x+right, y+top, z+up,
+            centered at 0,0,0, scaled to span from -1 to +1 on each axis.
+            Vertex and side names are based on a perspective looking down.
+        */
+        let corners = vec![
+            /* Down-z side of cube */
+            -1.,-1.,-1., /* LL */
+             1.,-1.,-1., /* LR */ 
+             1., 1.,-1., /* UR */ 
+            -1., 1.,-1., /* UL */ 
+            /* Up+z side of cube */
+            -1.,-1., 1., /* LL */
+             1.,-1., 1., /* LR */ 
+             1., 1., 1., /* UR */ 
+            -1., 1., 1., /* UL */ 
+        ];
 
-        let indices = TypedArray::<u16>::from(&[
-            0,1,2, 0,2,3, 4,5,6, 4,6,7,
-            8,9,10, 8,10,11, 12,13,14, 12,14,15,
-            16,17,18, 16,18,19, 20,21,22, 20,22,23 
-        ][..]).buffer();
+        let triColors : Vec<u8> = vec![
+            /* Down-z */
+            255,0,255, 255,0,255,
+            /* Up+z */
+            200,200,200, 200,200,200,
+            /* Bottom-y */
+            100,200,100, 100,200,100,
+            /* Top+y */
+            200,200,100, 200,200,100,
+            /* Left-x */
+            255,0,0, 255,0,0,
+            /* Right+x */
+            0,255,0, 0,255,0,
+        ];
 
-        let colors = TypedArray::<f32>::from(&[
-            5.,3.,7., 5.,3.,7., 5.,3.,7., 5.,3.,7.,
-            1.,1.,3., 1.,1.,3., 1.,1.,3., 1.,1.,3.,
-            0.,0.,1., 0.,0.,1., 0.,0.,1., 0.,0.,1.,
-            1.,0.,0., 1.,0.,0., 1.,0.,0., 1.,0.,0.,
-            1.,1.,0., 1.,1.,0., 1.,1.,0., 1.,1.,0.,
-            0.,1.,0., 0.,1.,0., 0.,1.,0., 0.,1.,0.
-        ][..]).buffer();
+        // This follows a right-hand winding order, where the right-hand rule
+        // dictates the direction of the normals of each triangle, facing
+        // out of the cube.  Side names are based on a perspective looking down.
+        let triIndices : Vec<u8> = vec![
+            /* Down-z */
+            2, 1, 0,  0, 3, 2,
+            /* Up+z */
+            4, 5, 6,  6, 7, 4,
+            /* Bottom-y */
+            0, 5, 4,  0, 1, 5,
+            /* Top+y */
+            3, 7, 6,  3, 6, 2,
+            /* Left-x */
+            3, 4, 7,  3, 0, 7,
+            /* Right+x */
+            2, 6, 5,  2, 5, 1,
+        ];
 
-        let position_ebo = webgl.create_buffer().unwrap();
-        webgl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, position_ebo);
+        let mut vertices = Vec::new();
+        let mut colors = Vec::new();
+        let mut normals = Vec::new();
 
-        let position_vbo = webgl.create_buffer().unwrap();
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, position_vbo);
+        let triCount = triIndices.len() / 3;
+        for i in 0..triCount {
+            let triIndicesOffset = i * 4;
+            let mut triVertices : [Vec3; 4];
+            for j in 0..3 {
+                let vertexIndex = triIndices[triIndicesOffset + j];
+                let cornersOffset = vertexIndex as usize * 3;
+                let x = corners[cornersOffset];
+                let y = corners[cornersOffset + 1];
+                let z = corners[cornersOffset + 2];
+                triVertices[j] = glm::vec3(x, y, z);
+                vertices.push(x);
+                vertices.push(y);
+                vertices.push(z);
+            }
 
-        let color_vbo = webgl.create_buffer().unwrap();
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, color_vbo);
+            let normal = glm::triangle_normal(
+                &triVertices[0],
+                &triVertices[1],
+                &triVertices[2]
+            );
+            for j in 0..3 {
+                normals.push(normal.x);
+                normals.push(normal.y);
+                normals.push(normal.z);
+            }
+
+            let colorOffset = i as usize * 3;
+            let r = triColors[colorOffset];
+            let g = triColors[colorOffset + 1];
+            let b = triColors[colorOffset + 2];
+            for j in 0..3 {
+                colors.push(r);
+                colors.push(g);
+                colors.push(b);
+            }
+        }
+
+        let elementCount = vertices.len() as i32;
+
+        let webVertices = TypedArray::<f32>::from(vertices.as_slice()).buffer();
+        let webColors = TypedArray::<u8>::from(colors.as_slice()).buffer();
+        let webNormals = TypedArray::<f32>::from(normals.as_slice()).buffer();
+
+        let positionVbo = webgl.create_buffer().unwrap();
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&positionVbo));
+        webgl.buffer_data_1(WebGL::ARRAY_BUFFER, Some(&webVertices), WebGL::STATIC_DRAW);
+
+        let colorVbo = webgl.create_buffer().unwrap();
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&colorVbo));
+        webgl.buffer_data_1(WebGL::ARRAY_BUFFER, Some(&webColors), WebGL::STATIC_DRAW);
+
+        let normalVbo = webgl.create_buffer().unwrap();
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&normalVbo));
+        webgl.buffer_data_1(WebGL::ARRAY_BUFFER, Some(&webNormals), WebGL::STATIC_DRAW);
 
         Self {
             context: context,
             program: program,
-            mvp_matrix: program.GetUniform("MVPMatrix"),
-            vertex_position: program.GetAttrib("VertexPosition"),
-            vertex_color: program.GetAttrib("VertexColor"),
-            position_ebo: position_ebo,
-            position_vbo: position_vbo,
-            color_vbo: color_vbo,
+            unifMvpMatrix: program.GetUniform("MVPMatrix"),
+            attrVertexPosition: program.GetAttrib("VertexPosition"),
+            attrVertexColor: program.GetAttrib("VertexColor"),
+            attrVertexNormal: program.GetAttrib("VertexNormal"),
+            positionVbo: positionVbo,
+            colorVbo: colorVbo,
+            normalVbo: normalVbo,
+            elementCount: elementCount,
         }
     }
 
-    pub fn Draw() {
+    pub fn Draw(&mut self, mvpMatrix: &Mat4) {
         let webgl = self.context.webgl;
 
-        webgl.use_program(self.program.program);
+        webgl.use_program(Some(&self.program.webGlProgram));
 
-        webgl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, &self.vertex_ebo);
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, &self.vertex_vbo);
-        webgl.enable_vertex_attrib_array(self.vertex_position);
-        webgl.vertex_attrib_pointer(self.vertex_position, 3, WebGL::FLOAT, false, 0, 0) ;
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.positionVbo));
+        webgl.vertex_attrib_pointer(self.attrVertexPosition, 3, WebGL::FLOAT, false, 0, 0) ;
+        webgl.enable_vertex_attrib_array(self.attrVertexPosition);
 
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&color_buffer));
-        let color = webgl.get_attrib_location(&shader_program, "color") as u32;
-        webgl.vertex_attrib_pointer(color, 3, WebGL::FLOAT, false, 0, 0) ;
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.colorVbo));
+        webgl.vertex_attrib_pointer(self.attrVertexColor, 3, WebGL::UNSIGNED_BYTE, false, 0, 0) ;
+        webgl.enable_vertex_attrib_array(self.attrVertexColor);
 
-        // Color
-        webgl.enable_vertex_attrib_array(color);
+        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.normalVbo));
+        webgl.vertex_attrib_pointer(self.attrVertexNormal, 3, WebGL::FLOAT, false, 0, 0) ;
+        webgl.enable_vertex_attrib_array(self.attrVertexNormal);
+
+        webgl.uniform_matrix4fv(Some(&self.unifMvpMatrix), false, mvpMatrix.as_slice());
+
+        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.elementCount);
     }
 }
-
 
 /*
     Graphics Subsystem State
@@ -271,30 +345,40 @@ impl Cube {
 pub struct GraphicsState {
     context: Rc<Context>,
     cube: Cube,
+    cubePos: ModelAffineTransform,
 }
 
 impl GraphicsState {
     pub fn new() -> Self {
         let context = Rc::new(Context::new("#canvas"));
-        let cube = Cube::new(context);
 
-        let state = Self {
+        Self {
             context: context,
-            cube: cube,
-        };
-
-        state.initialize();
-
-        return state;
+            cube: Cube::new(context),
+            cubePos: ModelAffineTransform::new(),
+        }
     }
 
-    fn initialize(&mut self) {
-        let webgl = self.context.webgl;
+    pub fn RenderScene(&mut self, nowSeconds: f64) {
+        self.context.UpdateViewport();
+        self.context.Clear();
 
-        let mov_matrix = [1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.];
-        let mut view_matrix = [1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.];
+        // Look down from above at the cube
+        let eye = glm::vec3(0.0, 0.0, 2.0);
+        let center = glm::vec3(0.0, 0.0, 0.0);
+        let up = glm::vec3(0.0, 1.0, 0.0);
 
-        // translating z
-        view_matrix[14] -= 6.; //zoom
+        let viewMatrix = glm::look_at(
+            &eye,
+            &center,
+            &up,
+        );
+        let projViewMatrix = self.context.projectionMatrix * viewMatrix;
+
+        let mvpMatrix = self.cubePos.CalculateMvpMatrix(projViewMatrix);
+
+        // FIXME: Rotate the cube here each frame..
+
+        self.cube.Draw(mvpMatrix);
     }
 }

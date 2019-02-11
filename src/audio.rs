@@ -89,4 +89,8 @@ impl AudioState {
             &self.js_ctx,
             beep);
     }
+
+    pub fn PlayBleepsAndBloops(nowSeconds: f64) {
+        // FIXME
+    }
 }

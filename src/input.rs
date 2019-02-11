@@ -13,4 +13,8 @@ impl InputState {
         InputState {
         }
     }
+
+    pub fn CheckFingerTips(nowSeconds: f64) {
+        
+    }
 }
