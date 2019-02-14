@@ -1,4 +1,4 @@
-use stdweb::traits::*;
+//use stdweb::traits::*;
 use stdweb::unstable::TryInto;
 use webgl_rendering_context::{
     WebGLRenderingContext as WebGL,
@@ -14,8 +14,8 @@ use stdweb::web::{
     TypedArray,
 };
 use stdweb::web::html_element::CanvasElement;
-use std::rc::Rc;
 use glm::{Vec3, Quat, Mat4};
+use tools::js_log;
 
 /*
     WebGL Context with Right-Handed Projection Matrix
@@ -38,19 +38,15 @@ impl Context {
         webgl.front_face(WebGL::CCW);
         webgl.cull_face(WebGL::BACK);
 
-        // FIXME
-        //webgl.enable(WebGL::DEPTH_TEST);
+        webgl.enable(WebGL::DEPTH_TEST);
 
-        let thiz = Self {
+        Self {
             canvas: canvas,
             webgl: webgl,
             width: 0,
             height: 0,
             projectionMatrix: Mat4::identity(),
-        };
-        thiz.UpdateViewport();
-        thiz.Clear();
-        thiz
+        }
     }
 
     // Following the guide here:
@@ -93,22 +89,21 @@ impl Context {
     WebGL Shader Program
 */
 pub struct ShaderProgram {
-    context: Rc<Context>,
     fs: WebGLShader,
     vs: WebGLShader,
     webGlProgram: WebGLProgram,
 }
 
 impl ShaderProgram {
-    pub fn new(context: Rc<Context>, vscode: &str, fscode: &str) -> Self {
-        let webgl = context.webgl;
+    pub fn new(context: &Context, vsCode: &str, fsCode: &str) -> Self {
+        let webgl = &context.webgl;
 
         let vs = webgl.create_shader(WebGL::VERTEX_SHADER).unwrap();
-        webgl.shader_source(&vs, &vscode);
+        webgl.shader_source(&vs, &vsCode);
         webgl.compile_shader(&vs);
 
         let fs = webgl.create_shader(WebGL::FRAGMENT_SHADER).unwrap();
-        webgl.shader_source(&fs, &fscode);
+        webgl.shader_source(&fs, &fsCode);
         webgl.compile_shader(&fs);
 
         let program = webgl.create_program().unwrap();
@@ -117,18 +112,17 @@ impl ShaderProgram {
         webgl.link_program(&program);
 
         Self {
-            context: context,
             fs: fs,
             vs: vs,
             webGlProgram: program,
         }
     }
 
-    fn GetUniform(&mut self, name: &str) -> WebGLUniformLocation {
-        self.context.webgl.get_uniform_location(&self.webGlProgram, name).unwrap()
+    fn GetUniform(&self, context: &Context, name: &str) -> WebGLUniformLocation {
+        context.webgl.get_uniform_location(&self.webGlProgram, name).unwrap()
     }
-    fn GetAttrib(&mut self, name: &str) -> u32 {
-        self.context.webgl.get_attrib_location(&self.webGlProgram, name) as u32
+    fn GetAttrib(&self, context: &Context, name: &str) -> u32 {
+        context.webgl.get_attrib_location(&self.webGlProgram, name) as u32
     }
 }
 
@@ -138,7 +132,7 @@ impl ShaderProgram {
 pub struct ModelAffineTransform {
     position: Vec3,
     rotation: Quat,
-    scale: f32,
+    scale: Vec3,
 }
 
 impl ModelAffineTransform {
@@ -146,7 +140,7 @@ impl ModelAffineTransform {
         Self {
             position: glm::vec3(0.,0.,0.),
             rotation: Quat::identity(),
-            scale: 1.,
+            scale: glm::vec3(1., 1., 1.),
         }
     }
 
@@ -155,13 +149,13 @@ impl ModelAffineTransform {
 
         // This will right-multiply the provided matrix by the scale matrix
         let scaleMatrix = glm::scale(
-            glm::identity(),
-            glm::vec3(self.scale, self.scale, self.scale));
+            &glm::identity(),
+            &self.scale);
 
-        let rotatedScaleMatrix = self.rotation.toMat4() * scaleMatrix;
+        let rotatedScaleMatrix = glm::quat_to_mat4(&self.rotation) * scaleMatrix;
 
         // This generates a translation matrix and right-multiplies it by the provided matrix
-        let modelMatrix = glm::translate(rotatedScaleMatrix, self.position);
+        let modelMatrix = glm::translate(&rotatedScaleMatrix, &self.position);
 
         viewProjectionMatrix * modelMatrix
     }
@@ -171,7 +165,6 @@ impl ModelAffineTransform {
     Cube Renderer
  */
 pub struct Cube {
-    context: Rc<Context>,
     program: ShaderProgram,
     unifMvpMatrix: WebGLUniformLocation,
     attrVertexPosition: u32,
@@ -184,8 +177,8 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn new(context: Rc<Context>) -> Self {
-        let webgl = context.webgl;
+    pub fn new(context: &Context) -> Self {
+        let webgl = &context.webgl;
 
         let vsCode = include_str!("shaders/flat_vs.glsl");
         let fsCode = include_str!("shaders/flat_fs.glsl");
@@ -249,7 +242,7 @@ impl Cube {
         let triCount = triIndices.len() / 3;
         for i in 0..triCount {
             let triIndicesOffset = i * 4;
-            let mut triVertices : [Vec3; 4];
+            let mut triVertices : [Vec3; 4] = unsafe { std::mem::uninitialized() };
             for j in 0..3 {
                 let vertexIndex = triIndices[triIndicesOffset + j];
                 let cornersOffset = vertexIndex as usize * 3;
@@ -267,7 +260,7 @@ impl Cube {
                 &triVertices[1],
                 &triVertices[2]
             );
-            for j in 0..3 {
+            for _j in 0..3 {
                 normals.push(normal.x);
                 normals.push(normal.y);
                 normals.push(normal.z);
@@ -277,7 +270,7 @@ impl Cube {
             let r = triColors[colorOffset];
             let g = triColors[colorOffset + 1];
             let b = triColors[colorOffset + 2];
-            for j in 0..3 {
+            for _j in 0..3 {
                 colors.push(r);
                 colors.push(g);
                 colors.push(b);
@@ -302,13 +295,17 @@ impl Cube {
         webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&normalVbo));
         webgl.buffer_data_1(WebGL::ARRAY_BUFFER, Some(&webNormals), WebGL::STATIC_DRAW);
 
+        let unifMvpMatrix = program.GetUniform(&context, "MVPMatrix");
+        let attrVertexPosition = program.GetAttrib(&context, "VertexPosition");
+        let attrVertexColor = program.GetAttrib(&context, "VertexColor");
+        let attrVertexNormal = program.GetAttrib(&context, "VertexNormal");
+
         Self {
-            context: context,
             program: program,
-            unifMvpMatrix: program.GetUniform("MVPMatrix"),
-            attrVertexPosition: program.GetAttrib("VertexPosition"),
-            attrVertexColor: program.GetAttrib("VertexColor"),
-            attrVertexNormal: program.GetAttrib("VertexNormal"),
+            unifMvpMatrix: unifMvpMatrix,
+            attrVertexPosition: attrVertexPosition,
+            attrVertexColor: attrVertexColor,
+            attrVertexNormal: attrVertexNormal,
             positionVbo: positionVbo,
             colorVbo: colorVbo,
             normalVbo: normalVbo,
@@ -316,8 +313,8 @@ impl Cube {
         }
     }
 
-    pub fn Draw(&mut self, mvpMatrix: &Mat4) {
-        let webgl = self.context.webgl;
+    pub fn Draw(&mut self, context: &Context, mvpMatrix: &Mat4) {
+        let webgl = &context.webgl;
 
         webgl.use_program(Some(&self.program.webGlProgram));
 
@@ -343,23 +340,24 @@ impl Cube {
     Graphics Subsystem State
  */
 pub struct GraphicsState {
-    context: Rc<Context>,
+    context: Context,
     cube: Cube,
     cubePos: ModelAffineTransform,
 }
 
 impl GraphicsState {
     pub fn new() -> Self {
-        let context = Rc::new(Context::new("#canvas"));
+        let context = Context::new("#canvas");
+        let cube = Cube::new(&context);
 
         Self {
             context: context,
-            cube: Cube::new(context),
+            cube: cube,
             cubePos: ModelAffineTransform::new(),
         }
     }
 
-    pub fn RenderScene(&mut self, nowSeconds: f64) {
+    pub fn RenderScene(&mut self, _nowSeconds: f64) {
         self.context.UpdateViewport();
         self.context.Clear();
 
@@ -375,10 +373,10 @@ impl GraphicsState {
         );
         let projViewMatrix = self.context.projectionMatrix * viewMatrix;
 
-        let mvpMatrix = self.cubePos.CalculateMvpMatrix(projViewMatrix);
+        let mvpMatrix = self.cubePos.CalculateMvpMatrix(&projViewMatrix);
 
         // FIXME: Rotate the cube here each frame..
 
-        self.cube.Draw(mvpMatrix);
+        self.cube.Draw(&self.context, &mvpMatrix);
     }
 }

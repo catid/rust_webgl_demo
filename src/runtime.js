@@ -1,6 +1,6 @@
 // This file is prepended to the Javascript produced by Cargo-Web
 
-var canvas = document.getElementById('game_canvas');
+var canvas = document.getElementById('canvas');
 
 // Handle taps:
 

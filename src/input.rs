@@ -1,11 +1,13 @@
+use tools::js_log;
+
 pub struct InputState {
     // Nothing here yet.
 }
 
-#[cfg(feature="jsexports")]
+//#[cfg(feature="jsexports")]
 #[js_export]
 fn js_on_tap(x: i32, y: i32) {
-    js_log(format!("Tap at {}, {}", x, y));
+    //js_log(format!("Tap at {}, {}", x, y));
 }
 
 impl InputState {
@@ -14,7 +16,7 @@ impl InputState {
         }
     }
 
-    pub fn CheckFingerTips(nowSeconds: f64) {
-        
+    pub fn CheckFingerTips(&mut self, _nowSeconds: f64) {
+
     }
 }

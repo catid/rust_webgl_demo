@@ -82,7 +82,7 @@ impl AudioState {
         match note {
             0 => beep = &self.beep_a,
             1 => beep = &self.beep_b,
-            2 => beep = &self.beep_c,
+            _ => beep = &self.beep_c,
         }
 
         js_play_buffer(
@@ -90,7 +90,7 @@ impl AudioState {
             beep);
     }
 
-    pub fn PlayBleepsAndBloops(nowSeconds: f64) {
+    pub fn PlayBleepsAndBloops(&mut self, _nowSeconds: f64) {
         // FIXME
     }
 }
