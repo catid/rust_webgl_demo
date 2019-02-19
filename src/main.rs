@@ -10,6 +10,8 @@ extern crate stdweb_derive;
 extern crate nalgebra_glm as glm;
 extern crate sample;
 
+extern crate specs;
+
 mod webgl_rendering_context;
 mod input;
 mod graphics;

@@ -8,12 +8,13 @@ default = []
 jsexports = [] # Exports to JS from Rust
 
 [dependencies]
-stdweb = "0.4.13"
-nalgebra-glm = "0.2.1"
+stdweb = "0.4.14"
+nalgebra-glm = "0.3.0"
 sample = "0.10.0"
 stdweb-derive = "0.5.1"
-serde = "1.0.85"
-serde_derive = "1.0.85"
+serde = "1.0.88"
+serde_derive = "1.0.88"
+specs = "0.14.3"
 
 [build-dependencies]
 webgl_generator = "0.2.0"

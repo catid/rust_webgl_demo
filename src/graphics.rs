@@ -80,7 +80,7 @@ impl Context {
     }
 
     pub fn Clear(&self) {
-        self.webgl.clear_color(1.0, 0.0, 0.0, 1.0);
+        self.webgl.clear_color(0.0, 0.0, 0.0, 1.0);
         self.webgl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
     }
 }
@@ -102,14 +102,37 @@ impl ShaderProgram {
         webgl.shader_source(&vs, &vsCode);
         webgl.compile_shader(&vs);
 
+        let vs_success : bool = webgl.get_shader_parameter(&vs, WebGL::COMPILE_STATUS).try_into().unwrap();
+
+        if !vs_success {
+            let info = webgl.get_shader_info_log(&vs);
+            js_log(format!("CompileShader failed: {}", info.unwrap()));
+        }
+
         let fs = webgl.create_shader(WebGL::FRAGMENT_SHADER).unwrap();
         webgl.shader_source(&fs, &fsCode);
         webgl.compile_shader(&fs);
+
+        let fs_success : bool = webgl.get_shader_parameter(&fs, WebGL::COMPILE_STATUS).try_into().unwrap();
+
+        if !fs_success {
+            let info = webgl.get_shader_info_log(&fs);
+            js_log(format!("CompileShader failed: {}", info.unwrap()));
+        }
 
         let program = webgl.create_program().unwrap();
         webgl.attach_shader(&program, &vs);
         webgl.attach_shader(&program, &fs);
         webgl.link_program(&program);
+
+        let success : bool = webgl.get_program_parameter(&program, WebGL::LINK_STATUS).try_into().unwrap();
+
+        if !success {
+            let info = webgl.get_program_info_log(&program);
+            js_log(format!("LinkProgram failed: {}", info.unwrap()));
+        }
+
+        let x = context.webgl.get_uniform_location(&program, "MVPMatrix").unwrap();
 
         Self {
             fs: fs,
@@ -173,7 +196,7 @@ pub struct Cube {
     positionVbo: WebGLBuffer,
     colorVbo: WebGLBuffer,
     normalVbo: WebGLBuffer,
-    elementCount: i32,
+    tri_count: i32,
 }
 
 impl Cube {
@@ -235,14 +258,16 @@ impl Cube {
             2, 6, 5,  2, 5, 1,
         ];
 
-        let mut vertices = Vec::new();
-        let mut colors = Vec::new();
-        let mut normals = Vec::new();
+        let tri_count = triIndices.len() / 3;
 
-        let triCount = triIndices.len() / 3;
-        for i in 0..triCount {
-            let triIndicesOffset = i * 4;
-            let mut triVertices : [Vec3; 4] = unsafe { std::mem::uninitialized() };
+        let mut vertices = Vec::with_capacity(tri_count * 3);
+        let mut colors = Vec::with_capacity(tri_count * 3);
+        let mut normals = Vec::with_capacity(tri_count * 3);
+
+        for i in 0..tri_count {
+            let triIndicesOffset = i * 3;
+            let mut triVertices : [Vec3; 3] = unsafe { std::mem::uninitialized() };
+
             for j in 0..3 {
                 let vertexIndex = triIndices[triIndicesOffset + j];
                 let cornersOffset = vertexIndex as usize * 3;
@@ -277,11 +302,11 @@ impl Cube {
             }
         }
 
-        let elementCount = vertices.len() as i32;
-
         let webVertices = TypedArray::<f32>::from(vertices.as_slice()).buffer();
         let webColors = TypedArray::<u8>::from(colors.as_slice()).buffer();
         let webNormals = TypedArray::<f32>::from(normals.as_slice()).buffer();
+
+        js_log(format!("Generated {} triangles", tri_count));
 
         let positionVbo = webgl.create_buffer().unwrap();
         webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&positionVbo));
@@ -309,7 +334,7 @@ impl Cube {
             positionVbo: positionVbo,
             colorVbo: colorVbo,
             normalVbo: normalVbo,
-            elementCount: elementCount,
+            tri_count: tri_count as i32,
         }
     }
 
@@ -318,21 +343,27 @@ impl Cube {
 
         webgl.use_program(Some(&self.program.webGlProgram));
 
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.positionVbo));
-        webgl.vertex_attrib_pointer(self.attrVertexPosition, 3, WebGL::FLOAT, false, 0, 0) ;
-        webgl.enable_vertex_attrib_array(self.attrVertexPosition);
+        if self.attrVertexPosition != u32::max_value() {
+            webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.positionVbo));
+            webgl.vertex_attrib_pointer(self.attrVertexPosition, 3, WebGL::FLOAT, false, 0, 0) ;
+            webgl.enable_vertex_attrib_array(self.attrVertexPosition);
+        }
 
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.colorVbo));
-        webgl.vertex_attrib_pointer(self.attrVertexColor, 3, WebGL::UNSIGNED_BYTE, false, 0, 0) ;
-        webgl.enable_vertex_attrib_array(self.attrVertexColor);
+        if self.attrVertexColor != u32::max_value() {
+            webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.colorVbo));
+            webgl.vertex_attrib_pointer(self.attrVertexColor, 3, WebGL::UNSIGNED_BYTE, true, 0, 0) ;
+            webgl.enable_vertex_attrib_array(self.attrVertexColor);
+        }
 
-        webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.normalVbo));
-        webgl.vertex_attrib_pointer(self.attrVertexNormal, 3, WebGL::FLOAT, false, 0, 0) ;
-        webgl.enable_vertex_attrib_array(self.attrVertexNormal);
+        if self.attrVertexNormal != u32::max_value() {
+            webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.normalVbo));
+            webgl.vertex_attrib_pointer(self.attrVertexNormal, 3, WebGL::FLOAT, false, 0, 0) ;
+            webgl.enable_vertex_attrib_array(self.attrVertexNormal);
+        }
 
         webgl.uniform_matrix4fv(Some(&self.unifMvpMatrix), false, mvpMatrix.as_slice());
 
-        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.elementCount);
+        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.tri_count);
     }
 }
 
