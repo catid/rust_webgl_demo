@@ -38,7 +38,8 @@ impl Context {
         webgl.front_face(WebGL::CCW);
         webgl.cull_face(WebGL::BACK);
 
-        webgl.disable(WebGL::DEPTH_TEST);
+        webgl.enable(WebGL::DEPTH_TEST);
+        webgl.depth_func(WebGL::GREATER);
 
         Self {
             canvas: canvas,
@@ -81,6 +82,7 @@ impl Context {
 
     pub fn Clear(&self) {
         self.webgl.clear_color(0.0, 0.0, 0.0, 1.0);
+        self.webgl.clear_depth(0.0);
         self.webgl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
     }
 }
