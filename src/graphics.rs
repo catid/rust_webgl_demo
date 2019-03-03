@@ -38,7 +38,7 @@ impl Context {
         webgl.front_face(WebGL::CCW);
         webgl.cull_face(WebGL::BACK);
 
-        webgl.enable(WebGL::DEPTH_TEST);
+        webgl.disable(WebGL::DEPTH_TEST);
 
         Self {
             canvas: canvas,
@@ -225,21 +225,6 @@ impl Cube {
             -1., 1., 1., /* UL */ 
         ];
 
-        let triColors : Vec<u8> = vec![
-            /* Down-z */
-            255,0,255, 255,0,255,
-            /* Up+z */
-            200,200,200, 200,200,200,
-            /* Bottom-y */
-            100,200,100, 100,200,100,
-            /* Top+y */
-            200,200,100, 200,200,100,
-            /* Left-x */
-            255,0,0, 255,0,0,
-            /* Right+x */
-            0,255,0, 0,255,0,
-        ];
-
         // This follows a right-hand winding order, where the right-hand rule
         // dictates the direction of the normals of each triangle, facing
         // out of the cube.  Side names are based on a perspective looking down.
@@ -253,9 +238,24 @@ impl Cube {
             /* Top+y */
             3, 7, 6,  3, 6, 2,
             /* Left-x */
-            3, 4, 7,  3, 0, 7,
+            0, 4, 3,  4, 7, 3,
             /* Right+x */
             2, 6, 5,  2, 5, 1,
+        ];
+
+        let triColors : Vec<u8> = vec![
+            /* Down-z */
+            255,0,200, 255,0,255,
+            /* Up+z */
+            200,200,200, 200,200,255,
+            /* Bottom-y */
+            100,200,100, 100,255,100,
+            /* Top+y */
+            200,200,100, 200,255,100,
+            /* Left-x */
+            200,0,0, 255,0,0,
+            /* Right+x */
+            0,200,0, 0,255,0,
         ];
 
         let tri_count = triIndices.len() / 3;
@@ -271,9 +271,10 @@ impl Cube {
             for j in 0..3 {
                 let vertexIndex = triIndices[triIndicesOffset + j];
                 let cornersOffset = vertexIndex as usize * 3;
-                let x = corners[cornersOffset];
-                let y = corners[cornersOffset + 1];
-                let z = corners[cornersOffset + 2];
+                let scale = 1.0f32;
+                let x = corners[cornersOffset] * scale;
+                let y = corners[cornersOffset + 1] * scale;
+                let z = corners[cornersOffset + 2] * scale;
                 triVertices[j] = glm::vec3(x, y, z);
                 vertices.push(x);
                 vertices.push(y);
@@ -306,7 +307,7 @@ impl Cube {
         let webColors = TypedArray::<u8>::from(colors.as_slice()).buffer();
         let webNormals = TypedArray::<f32>::from(normals.as_slice()).buffer();
 
-        js_log(format!("Generated {} triangles", tri_count));
+        //js_log(format!("Generated {} triangles", tri_count));
 
         let positionVbo = webgl.create_buffer().unwrap();
         webgl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&positionVbo));
@@ -363,7 +364,7 @@ impl Cube {
 
         webgl.uniform_matrix4fv(Some(&self.unifMvpMatrix), false, mvpMatrix.as_slice());
 
-        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.tri_count);
+        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.tri_count * 3);
     }
 }
 
@@ -388,12 +389,12 @@ impl GraphicsState {
         }
     }
 
-    pub fn RenderScene(&mut self, _nowSeconds: f64) {
+    pub fn RenderScene(&mut self, nowSeconds: f64) {
         self.context.UpdateViewport();
         self.context.Clear();
 
         // Look down from above at the cube
-        let eye = glm::vec3(0.0, 0.0, 2.0);
+        let eye = glm::vec3(0.0, 0.0, 10.0);
         let center = glm::vec3(0.0, 0.0, 0.0);
         let up = glm::vec3(0.0, 1.0, 0.0);
 
@@ -403,6 +404,13 @@ impl GraphicsState {
             &up,
         );
         let projViewMatrix = self.context.projectionMatrix * viewMatrix;
+
+        let angle = glm::modf(nowSeconds / 1000.0f64, glm::two_pi()) as f32;
+
+        self.cubePos.rotation = nalgebra_glm::quat_angle_axis(
+            angle,
+            &glm::vec3(1.0, 1.0, 1.0)
+        );
 
         let mvpMatrix = self.cubePos.CalculateMvpMatrix(&projViewMatrix);
 

@@ -9,6 +9,6 @@ attribute vec3 VertexNormal;
 varying vec3 FragColor;
 
 void main() {
-	gl_Position = MVPMatrix * vec4(VertexPosition.xyz, 0);
+	gl_Position = MVPMatrix * vec4(VertexPosition.xyz, 1);
 	FragColor = VertexColor;
 }
