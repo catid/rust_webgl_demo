@@ -14,7 +14,7 @@ use stdweb::web::{
     TypedArray,
 };
 use stdweb::web::html_element::CanvasElement;
-use glm::{Vec3, Quat, Mat4};
+use glm::{Vec2, Vec3, Quat, Mat4};
 use tools::js_log;
 
 /*
@@ -25,7 +25,7 @@ pub struct Context {
     webgl: WebGL,
     width: i32,
     height: i32,
-    projectionMatrix: Mat4,
+    projection_matrix: Mat4,
 }
 
 impl Context {
@@ -46,7 +46,7 @@ impl Context {
             webgl: webgl,
             width: 0,
             height: 0,
-            projectionMatrix: Mat4::identity(),
+            projection_matrix: Mat4::identity(),
         }
     }
 
@@ -64,10 +64,10 @@ impl Context {
             self.webgl.viewport(0, 0, width, height);
 
             const fov : f32 = 60.;
-            const near : f32 = 0.;
-            const far : f32 = 100.;
+            const near : f32 = 2.;
+            const far : f32 = 20.;
 
-            self.projectionMatrix = glm::perspective_fov_rh_zo(
+            self.projection_matrix = glm::perspective_fov_rh_zo(
                 fov.to_radians(),
                 width as f32,
                 height as f32,
@@ -134,8 +134,6 @@ impl ShaderProgram {
             js_log(format!("LinkProgram failed: {}", info.unwrap()));
         }
 
-        let x = context.webgl.get_uniform_location(&program, "MVPMatrix").unwrap();
-
         Self {
             fs: fs,
             vs: vs,
@@ -148,41 +146,6 @@ impl ShaderProgram {
     }
     fn GetAttrib(&self, context: &Context, name: &str) -> u32 {
         context.webgl.get_attrib_location(&self.webGlProgram, name) as u32
-    }
-}
-
-/*
-    Model Affine Transform
- */
-pub struct ModelAffineTransform {
-    position: Vec3,
-    rotation: Quat,
-    scale: Vec3,
-}
-
-impl ModelAffineTransform {
-    pub fn new() -> Self {
-        Self {
-            position: glm::vec3(0.,0.,0.),
-            rotation: Quat::identity(),
-            scale: glm::vec3(1., 1., 1.),
-        }
-    }
-
-    pub fn CalculateMvpMatrix(&self, viewProjectionMatrix: &Mat4) -> Mat4 {
-        // Calculate ModelMatrix = TranslationMatrix * RotationMatrix * ScaleMatrix:
-
-        // This will right-multiply the provided matrix by the scale matrix
-        let scaleMatrix = glm::scale(
-            &glm::identity(),
-            &self.scale);
-
-        let rotatedScaleMatrix = glm::quat_to_mat4(&self.rotation) * scaleMatrix;
-
-        // This generates a translation matrix and right-multiplies it by the provided matrix
-        let modelMatrix = glm::translate(&rotatedScaleMatrix, &self.position);
-
-        viewProjectionMatrix * modelMatrix
     }
 }
 
@@ -288,6 +251,9 @@ impl Cube {
                 &triVertices[1],
                 &triVertices[2]
             );
+
+            //js_log(format!("triangle_normal for i = {}: {}", i, normal));
+
             for _j in 0..3 {
                 normals.push(normal.x);
                 normals.push(normal.y);
@@ -341,7 +307,7 @@ impl Cube {
         }
     }
 
-    pub fn Draw(&mut self, context: &Context, mvpMatrix: &Mat4) {
+    pub fn DrawMultiple(&mut self, context: &Context, mvp_matrices: &Vec<Mat4>) {
         let webgl = &context.webgl;
 
         webgl.use_program(Some(&self.program.webGlProgram));
@@ -364,9 +330,18 @@ impl Cube {
             webgl.enable_vertex_attrib_array(self.attrVertexNormal);
         }
 
-        webgl.uniform_matrix4fv(Some(&self.unifMvpMatrix), false, mvpMatrix.as_slice());
+        for mat in mvp_matrices {
+            webgl.uniform_matrix4fv(Some(&self.unifMvpMatrix), false, mat.as_slice());
 
-        webgl.draw_arrays(WebGL::TRIANGLES, 0, self.tri_count * 3);
+            webgl.draw_arrays(WebGL::TRIANGLES, 0, self.tri_count * 3);
+        }
+    }
+
+    pub fn Draw(&mut self, context: &Context, mvp_matrix: Mat4) {
+        let matrices = vec![
+            mvp_matrix
+        ];
+        self.DrawMultiple(context, &matrices);
     }
 }
 
@@ -376,7 +351,7 @@ impl Cube {
 pub struct GraphicsState {
     context: Context,
     cube: Cube,
-    cubePos: ModelAffineTransform,
+    positions: Vec<Vec2>,
 }
 
 impl GraphicsState {
@@ -384,10 +359,18 @@ impl GraphicsState {
         let context = Context::new("#canvas");
         let cube = Cube::new(&context);
 
+        let positions = vec![
+            glm::vec2(-2.0f32, 0.0f32),
+            glm::vec2(0.0f32, 0.0f32),
+            glm::vec2(2.0f32, 0.0f32),
+            glm::vec2(0.0f32, -2.0f32),
+            glm::vec2(0.0f32, 2.0f32),
+        ];
+
         Self {
             context: context,
             cube: cube,
-            cubePos: ModelAffineTransform::new(),
+            positions: positions,
         }
     }
 
@@ -396,28 +379,45 @@ impl GraphicsState {
         self.context.Clear();
 
         // Look down from above at the cube
-        let eye = glm::vec3(0.0, 0.0, 10.0);
+        let eye = glm::vec3(0.0, 0.0, -10.0);
         let center = glm::vec3(0.0, 0.0, 0.0);
         let up = glm::vec3(0.0, 1.0, 0.0);
 
-        let viewMatrix = glm::look_at(
+        let view_matrix = glm::look_at_rh(
             &eye,
             &center,
             &up,
         );
-        let projViewMatrix = self.context.projectionMatrix * viewMatrix;
+        let proj_view_matrix = self.context.projection_matrix * view_matrix;
 
         let angle = glm::modf(nowSeconds / 1000.0f64, glm::two_pi()) as f32;
 
-        self.cubePos.rotation = nalgebra_glm::quat_angle_axis(
-            angle,
-            &glm::vec3(1.0, 1.0, 1.0)
-        );
+        let mut mvp_matrices = vec![];
 
-        let mvpMatrix = self.cubePos.CalculateMvpMatrix(&projViewMatrix);
+        for position in &self.positions {
+            // This will right-multiply the provided matrix by the scale matrix
+            let scale_matrix = glm::scale(
+                &glm::identity(),
+                &glm::vec3(1.0, 1.0, 1.0)
+            );
+/*
+            let quat_angle = &nalgebra_glm::quat_angle_axis(
+                angle,
+                &glm::vec3(1.0, 1.0, 1.0)
+            );
 
-        // FIXME: Rotate the cube here each frame..
+            let rotate_matrix = glm::quat_to_mat4(quat_angle) * scale_matrix;
+*/
+            // This generates a translation matrix and right-multiplies it by the provided matrix
+            let translate_matrix = glm::translate(&scale_matrix,
+                &glm::vec3(position.x, position.y, 0.0f32)
+            );
 
-        self.cube.Draw(&self.context, &mvpMatrix);
+            let mvp = proj_view_matrix * translate_matrix;
+
+            mvp_matrices.push(mvp);
+        }
+
+        self.cube.DrawMultiple(&self.context, &mvp_matrices);
     }
 }
