@@ -39,7 +39,7 @@ impl Context {
         webgl.cull_face(WebGL::BACK);
 
         webgl.enable(WebGL::DEPTH_TEST);
-        webgl.depth_func(WebGL::GREATER);
+        webgl.depth_func(WebGL::LESS);
 
         Self {
             canvas: canvas,
@@ -82,7 +82,7 @@ impl Context {
 
     pub fn Clear(&self) {
         self.webgl.clear_color(0.0, 0.0, 0.0, 1.0);
-        self.webgl.clear_depth(0.0);
+        self.webgl.clear_depth(1.0);
         self.webgl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
     }
 }
@@ -395,25 +395,34 @@ impl GraphicsState {
         let mut mvp_matrices = vec![];
 
         for position in &self.positions {
+            /*
+                This will scale the whole object, rotate the whole object.
+                Translation is applied to each render within the object frame.
+                mvp = view * translate(rm * sm)
+
+                Translating the scale matrix will scale the whole thing down.
+                Scaling the translate matrix will scale each object down.
+            */
+
+            // This generates a translation matrix and right-multiplies it by the provided matrix
+            let translate_matrix = glm::translate(&glm::identity(),
+                &glm::vec3(position.x, position.y, 0.0f32)
+            );
+
             // This will right-multiply the provided matrix by the scale matrix
             let scale_matrix = glm::scale(
-                &glm::identity(),
-                &glm::vec3(1.0, 1.0, 1.0)
+                &translate_matrix,
+                &glm::vec3(0.5, 0.5, 0.5)
             );
-/*
+
             let quat_angle = &nalgebra_glm::quat_angle_axis(
                 angle,
                 &glm::vec3(1.0, 1.0, 1.0)
             );
 
-            let rotate_matrix = glm::quat_to_mat4(quat_angle) * scale_matrix;
-*/
-            // This generates a translation matrix and right-multiplies it by the provided matrix
-            let translate_matrix = glm::translate(&scale_matrix,
-                &glm::vec3(position.x, position.y, 0.0f32)
-            );
+            let rotate_matrix = scale_matrix * glm::quat_to_mat4(quat_angle);
 
-            let mvp = proj_view_matrix * translate_matrix;
+            let mvp = proj_view_matrix * rotate_matrix;
 
             mvp_matrices.push(mvp);
         }
